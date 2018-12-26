@@ -1,5 +1,6 @@
 package com.hypereclipse.selkie.cas;
 
+import com.hypereclipse.selkie.casbot.util.StringProcessing;
 import org.jetbrains.annotations.NotNull;
 
 import java.math.BigInteger;
@@ -19,39 +20,85 @@ import static com.hypereclipse.selkie.casbot.util.BotStatic.atsr;
  * All basic math operations can be applied.
  *
  * @author Selkie (Stanley S.)
- * @version 1.0
+ * @version 1.1
  * @since 1.0
  */
 public class Int implements Value
 {
-  /** A public constant representing the commonly used value of -1. */
-  public static final Int NEGATIVEONE = new Int(-1);
-  /** A public constant representing the commonly used value of 0. */
-  public static final Int ZERO = new Int(0);
-  /** A public constant representing the commonly used value of 1. */
-  public static final Int ONE = new Int(1);
-  /** A public constant representing the commonly used value of 2. */
-  public static final Int TWO = new Int(2);
-  /** A public constant representing the value 10. */
-  public static final Int TEN = new Int(10);
-  /** A public constant representing the commonly used value of 16. */
-  public static final Int SIXTEEN = new Int(16);
-  /** A public constant representing the maximum value that an integer can hold. */
-  public static final Int INTMIN = new Int(Integer.MIN_VALUE);
-  /** A public constant representing the minimum value that an integer can hold. */
-  public static final Int INTMAX = new Int(Integer.MAX_VALUE);
-  /** A public constant representing the maximum value that a long can hold. */
-  public static final Int LONGMIN = new Int(Long.MIN_VALUE);
-  /** A public constant representing the minimum value that a long can hold. */
-  public static final Int LONGMAX = new Int(Long.MAX_VALUE);
+  /**
+   * A public constant representing the commonly used value of -1.
+   *
+   * @since 1.0
+   */
+  public static final Int NEGATIVEONE = new Int(-1).clean();
+  /**
+   * A public constant representing the commonly used value of 0.
+   *
+   * @since 1.0
+   */
+  public static final Int ZERO = new Int(0).clean();
+  /**
+   * A public constant representing the commonly used value of 1.
+   *
+   * @since 1.0
+   */
+  public static final Int ONE = new Int(1).clean();
+  /**
+   * A public constant representing the commonly used value of 2.
+   *
+   * @since 1.0
+   */
+  public static final Int TWO = new Int(2).clean();
+  /**
+   * A public constant representing the value 10.
+   *
+   * @since 1.0
+   */
+  public static final Int TEN = new Int(10).clean();
+  /**
+   * A public constant representing the commonly used value of 16.
+   *
+   * @since 1.0
+   */
+  public static final Int SIXTEEN = new Int(16).clean();
+  /**
+   * A public constant representing the maximum value that an integer can hold.
+   *
+   * @since 1.0
+   */
+  public static final Int INTMIN = new Int(Integer.MIN_VALUE).clean();
+  /**
+   * A public constant representing the minimum value that an integer can hold.
+   *
+   * @since 1.0
+   */
+  public static final Int INTMAX = new Int(Integer.MAX_VALUE).clean();
+  /**
+   * A public constant representing the maximum value that a long can hold.
+   *
+   * @since 1.0
+   */
+  public static final Int LONGMIN = new Int(Long.MIN_VALUE).clean();
+  /**
+   * A public constant representing the minimum value that a long can hold.
+   *
+   * @since 1.0
+   */
+  public static final Int LONGMAX = new Int(Long.MAX_VALUE).clean();
 
 
-  /** <code>true</code> if negative. <code>false</code> otherwise. */
+  /**
+   * <code>true</code> if negative. <code>false</code> otherwise.
+   *
+   * @since 1.0
+   */
   private boolean negative;
   /**
    * Represents the infinite precision integer in a little-endian array of hexadecimal values.
    * Value at the 0th index is the 0x1s place, and values in the 1st index are the 0x10s place, etc.
    * Note: It MAY be padded with zeros. See: {@link com.hypereclipse.selkie.cas.Int#isClean}.
+   *
+   * @since 1.0
    */
   private int[] value; //Hex: 0-F
   /**
@@ -59,10 +106,14 @@ public class Int implements Value
    * <code>true</code> asserts that the array has no extraneous tailing zeros.
    * Ex: 0x0010 would be <code>false</code>.
    * Ex: 0x10 should be <code>true</code>, but may not be if {@link com.hypereclipse.selkie.cas.Int#clean()} has not been called.
+   *
+   * @since 1.0
    */
   private boolean isClean = false;
   /**
    * A hashmap to store products once they are calculated so they don't need to be recalculated, since multiplication is decently expensive.
+   *
+   * @since 1.0
    */
   private static HashMap<Int, HashMap<Int,Int>> precalculatedMultiplications = new HashMap<>();
   // Should one be added for division/modulus? Probably.
@@ -111,6 +162,65 @@ public class Int implements Value
   {
     this.value = value;
     this.negative = negative;
+  }
+
+  /**
+   * Protected constructor for {@link com.hypereclipse.selkie.cas.Int}.
+   *
+   * Duplicates an existing {@link com.hypereclipse.selkie.cas.Int}.
+   *
+   * Used by {@link com.hypereclipse.selkie.cas.Prime} to create a new {@link com.hypereclipse.selkie.cas.Prime} object without needing an array copy.
+   *
+   * @param val The {@link com.hypereclipse.selkie.cas.Int} object to duplicate.
+   * @since 1.1
+   */
+  protected Int(Int val)
+  {
+    this.value = val.value;
+    this.negative = val.negative;
+  }
+
+  /**
+   *
+   *
+   * @param integerString
+   * @param base
+   * @return
+   */
+  public static Int create(String integerString, int base)
+  {
+    char[] baseCharset = CHARSET_36; // If 62 or less
+    if(base == 2)
+      baseCharset = CHARSET_BINARY;
+    if(base == 8)
+      baseCharset = CHARSET_OCTAL;
+    if(base == 10)
+      baseCharset = CHARSET_DECIMAL;
+    if(base == 16)
+      baseCharset = CHARSET_HEX;
+    if(base == 64)
+      baseCharset = CHARSET_BASE64;
+    if (base == 63 || base > 64)
+      throw new IllegalArgumentException("That base is not supported!");
+
+    boolean isPosative = true;
+    if (integerString.charAt(0) == '-' || integerString.charAt(0) == '+')
+    {
+      if (integerString.charAt(0) == '-')
+        isPosative = false;
+      integerString = integerString.substring(1);
+    }
+
+    Int baseInt = new Int(base);
+    Int ret = ZERO;
+    for (char c : integerString.toCharArray())
+    {
+      int value = StringProcessing.indexOf(baseCharset, c);
+      ret = (Int)(ret.multiply(baseInt).add(new Int(value)));
+    }
+    if (!isPosative)
+      ret = (Int)ret.negate();
+    return ret;
   }
 
 
@@ -296,7 +406,9 @@ public class Int implements Value
    *
    * Since {@link com.hypereclipse.selkie.cas.Int} is the lowest level representation of a value, if the <code>other</code> value is anything other than an {@link com.hypereclipse.selkie.cas.Int}, it'll throw an {@link java.lang.IllegalArgumentException} because we don't know how to deal with that yet.
    *
-   * If the <code>other</code> value is an {@link com.hypereclipse.selkie.cas.Int}, the product between the two will be taken and a new {@link com.hypereclipse.selkie.cas.Int} will be created to represent them.
+   * If the <code>other</code> value is an {@link com.hypereclipse.selkie.cas.Int}, the quotient between the two will be taken and a new {@link com.hypereclipse.selkie.cas.Int} will be created to represent them.
+   *
+   * This method uses long division to
    *
    * @param other The other value to divided this by.
    * @return A new {@link com.hypereclipse.selkie.cas.Value} representing the product. If the <code>other</code> value is an {@link com.hypereclipse.selkie.cas.Int}, then it will then return a new {@link com.hypereclipse.selkie.cas.Int} object representing the product.
@@ -316,6 +428,7 @@ public class Int implements Value
     if (this.isZero()) return this;
     // Can't divide by zero. Yet.
     if (o.isZero()) throw new IllegalArgumentException("Divide by zero.");
+    if (o.equals(ONE)) return this;
 
     // Special cases that require some processing before we can begin.
     // Take care of negatives
@@ -335,8 +448,7 @@ public class Int implements Value
     //     ret
     //  o / this
 
-    // TODO: finish javadocing this document from here down.
-
+    // The length will be less than the original number.
     int[] ret = new int[this.value.length];
     int indecieOfCompare = value.length - o.value.length;
     Int temp = this;
@@ -584,15 +696,16 @@ public class Int implements Value
     return value[index];
   }
 
-  private void clean()
+  private Int clean()
   {
-    if (isClean) return;
+    if (isClean) return this;
     int i = value.length;
     while (get(--i) == 0 && i>=0) ;
     int[] ret = new int[++i];
     System.arraycopy(value, 0, ret, 0, i);
     value = ret;
     isClean = true;
+    return this;
   }
 
   public Integer toInt()
