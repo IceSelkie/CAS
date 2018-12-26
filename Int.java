@@ -234,89 +234,129 @@ public class Int implements Value
     return new Int(ret, false);
   }
 
+  /**
+   * Multiplies a {@link com.hypereclipse.selkie.cas.Value} by this {@link com.hypereclipse.selkie.cas.Int}.
+   *
+   * Since {@link com.hypereclipse.selkie.cas.Int} is the lowest level representation of a value, if the <code>other</code> value is anything other than an {@link com.hypereclipse.selkie.cas.Int}, it's {@link com.hypereclipse.selkie.cas.Value#multiply(Value)} will be called instead.
+   *
+   * If the <code>other</code> value is an {@link com.hypereclipse.selkie.cas.Int}, the product between the two will be taken and a new {@link com.hypereclipse.selkie.cas.Int} will be created to represent them.
+   *
+   * @param other The other value to be multiplied with this one.
+   * @return A new {@link com.hypereclipse.selkie.cas.Value} representing the product. If the <code>other</code> value is an {@link com.hypereclipse.selkie.cas.Int}, then it will then return a new {@link com.hypereclipse.selkie.cas.Int} object representing the product.
+   * @since 1.0
+   */
   public Value multiply(Value other)
   {
-    if (other instanceof Int)
-    {
-      Int o = (Int) other;
-
-      clean();
-      o.clean();
-
-      if (precalculatedMultiplications.containsKey(this) && precalculatedMultiplications.get(this).containsKey(o))
-        return precalculatedMultiplications.get(this).get(o);
-
-      if (o.value.length < value.length)
-        return o.multiply(this);
-
-      int lenMax = value.length + o.value.length;
-
-      Int ret = ZERO;
-      for (int i = 0; i < value.length; i++)
-        ret = (Int) (ret.add(o.multiply(value[i]).shift(4*i)));
-
-      ret = (Int)ret.abs();
-      if (isNegative()^o.isNegative())
-        ret = (Int)ret.negate();
-
-      if (!precalculatedMultiplications.containsKey(this))
-        precalculatedMultiplications.put(this,new HashMap<>());
-      precalculatedMultiplications.get(this).put(o,ret);
-
-      return ret;
-    }
-    else
+    // We only want to process it if we know how to (when its also an Int). Otherwise, we'll have their class process it.
+    if (!(other instanceof Int))
       return other.multiply(this);
+
+    Int o = (Int)other;
+
+    // Simple cases that require no processing
+    // {@link #isZero()} calls {@link #clean()} in them, so this cleans them for us, which we need so they have the correct hash and can be used in the hashmap lookup.
+    if (isZero() || o.isZero()) return ZERO;
+    // Squaring is more efficient than long multiplication, so lets do that instead.
+    //if (equals(o)) return square();
+
+    // If we've done the math before, no need to do it again. Just look up last time's answer.
+    if (precalculatedMultiplications.containsKey(this) && precalculatedMultiplications.get(this).containsKey(o))
+      return precalculatedMultiplications.get(this).get(o);
+    if (precalculatedMultiplications.containsKey(o) && precalculatedMultiplications.get(o).containsKey(this))
+      return precalculatedMultiplications.get(o).get(this);
+
+    // We want this's length shorter than o's, so the multiplication is done in less steps.
+    if (o.value.length < value.length)
+      return o.multiply(this);
+
+    // Store if the result is negative, so we don't have to deal with negatives in the actual multiplication.
+    boolean negative = isNegative() ^ o.isNegative();
+    o = (Int)o.abs();
+    // We only look at the digits from this, and the whole number of other, so we don't need to reset the sign of this.
+
+    // Long multiplication: Multiply the longer value by each digit in the smaller one shifted over by its place, and add them all together.
+    Int ret = ZERO;
+    for (int i = 0; i < value.length; i++)
+      ret = (Int)(ret.add(o.multiply(value[i]).shift(4 * i)));
+
+    // Set the final sign of the product. And <code>ret</code> should always be positive to begin with, since o is set to positive and this's digits are all always positive.
+    if (negative)
+      ret = (Int)ret.negate();
+
+    // Save this to the hashmap of previous multiplications to save us the work, should we be asked the same question again.
+    if (!precalculatedMultiplications.containsKey(this))
+      precalculatedMultiplications.put(this, new HashMap<>());
+    precalculatedMultiplications.get(this).put(o, ret);
+
+    return ret;
   }
 
+  /**
+   * Divides this {@link com.hypereclipse.selkie.cas.Int} by a {@link com.hypereclipse.selkie.cas.Value} using integer division.
+   *
+   * Since {@link com.hypereclipse.selkie.cas.Int} is the lowest level representation of a value, if the <code>other</code> value is anything other than an {@link com.hypereclipse.selkie.cas.Int}, it'll throw an {@link java.lang.IllegalArgumentException} because we don't know how to deal with that yet.
+   *
+   * If the <code>other</code> value is an {@link com.hypereclipse.selkie.cas.Int}, the product between the two will be taken and a new {@link com.hypereclipse.selkie.cas.Int} will be created to represent them.
+   *
+   * @param other The other value to divided this by.
+   * @return A new {@link com.hypereclipse.selkie.cas.Value} representing the product. If the <code>other</code> value is an {@link com.hypereclipse.selkie.cas.Int}, then it will then return a new {@link com.hypereclipse.selkie.cas.Int} object representing the product.
+   * @since 1.0
+   */
   public Int divideInteger(Value other)
   {
-    if (other instanceof Int)
-    {
-      Int o = (Int) other;
-      if (isNegative())
-        if (o.isNegative())
-          return negate().divideInteger(o.negate());
-        else
-          return (Int) negate().divideInteger(o).negate();
+    // We only want to process it if we know how to (when its also an Int). Otherwise, we'll have their class process it.
+    if (!(other instanceof Int))
+      // TODO: We need some other way to take care of integer division, if the value we are dividing by is not an integer.
+      throw new IllegalArgumentException("That isnt implemented yet!");
+
+    Int o = (Int)other;
+
+    // Simple cases that require no processing
+    // checks isZero on both, which cleans for us.
+    if (this.isZero()) return this;
+    // Can't divide by zero. Yet.
+    if (o.isZero()) throw new IllegalArgumentException("Divide by zero.");
+
+    // Special cases that require some processing before we can begin.
+    // Take care of negatives
+    if (this.isNegative())
       if (o.isNegative())
-        return (Int) divideInteger(o.negate()).negate();
+        return negate().divideInteger(o.negate());
+      else
+        return (Int)negate().divideInteger(o).negate();
+    if (o.isNegative())
+      return (Int)divideInteger(o.negate()).negate();
 
-      if (this.isZero()) return this;
-      if (o.isZero()) throw new IllegalArgumentException("Divide by zero.");
-      if (this.less(o))
-        return ZERO;
+    // Obvious zero case
+    if (this.less(o))
+      return ZERO;
 
-      clean();
-      o.clean();
+    // We are doing long division, and if it were on paper, it would look something like this:
+    //     ret
+    //  o / this
 
-      //     ret
-      //  o / this
+    // TODO: finish javadocing this document from here down.
 
-      int[] ret = new int[this.value.length];
-      int indecieOfCompare = value.length-o.value.length;
-      Int temp = this;
-      while (temp.greaterEqual(o))
+    int[] ret = new int[this.value.length];
+    int indecieOfCompare = value.length - o.value.length;
+    Int temp = this;
+    while (temp.greaterEqual(o))
+    {
+      //temp.clean();
+      //System.out.println(indecieOfCompare+" "+atsr(ret)+" "+atsr(temp.value)+" "+atsr(o.value));
+      // If its divisable at this point, do so.
+      while (temp.shift(-4 * indecieOfCompare).greaterEqual(o))
       {
+        ret[indecieOfCompare]++;
+        temp = (Int)temp.subtract(o.shift(4 * indecieOfCompare));
+
         //temp.clean();
         //System.out.println(indecieOfCompare+" "+atsr(ret)+" "+atsr(temp.value)+" "+atsr(o.value));
-        // If its divisable at this point, do so.
-        while (temp.shift(-4*indecieOfCompare).greaterEqual(o))
-        {
-          ret[indecieOfCompare]++;
-          temp = (Int)temp.subtract(o.shift(4*indecieOfCompare));
-
-          //temp.clean();
-          //System.out.println(indecieOfCompare+" "+atsr(ret)+" "+atsr(temp.value)+" "+atsr(o.value));
-        }
-        indecieOfCompare--;
       }
-
-      return new Int(ret,false);
-
+      indecieOfCompare--;
     }
-    else
-      throw new IllegalArgumentException("That isnt implemented yet!");
+
+    return new Int(ret, false);
   }
 
   public Value mod(Value other)
