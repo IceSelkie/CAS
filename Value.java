@@ -4,6 +4,13 @@ import org.jetbrains.annotations.NotNull;
 
 public interface Value extends Comparable
 {
+  public static final char[] CHARSET_BINARY = new char[]{'0', '1'};
+  public static final char[] CHARSET_OCTAL = "01234567".toCharArray();
+  public static final char[] CHARSET_DECIMAL = "0123456789".toCharArray();
+  public static final char[] CHARSET_HEX = "0123456789ABCDEF".toCharArray();
+  public static final char[] CHARSET_BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".toCharArray();
+  public static final char[] CHARSET_36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".toCharArray();
+
   public Value add(Value other);
   public Value subtract(Value other);
   public Value multiply(Value other);

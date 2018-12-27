@@ -1,5 +1,6 @@
 package com.hypereclipse.selkie.cas;
 
+import com.hypereclipse.selkie.casbot.util.CharProcessing;
 import com.hypereclipse.selkie.casbot.util.StringProcessing;
 import org.jetbrains.annotations.NotNull;
 
@@ -149,6 +150,75 @@ public class Int implements Value
   }
 
   /**
+   * Constructor for {@link com.hypereclipse.selkie.cas.Int}.
+   *
+   * Creates a new {@link com.hypereclipse.selkie.cas.Int} object from a given String.
+   *
+   * @param value The string that represents an integer value to convert to an {@link com.hypereclipse.selkie.cas.Int}.
+   * @since 1.0
+   */
+  public Int(String value)
+  {
+    // Convert to linked list to read easier
+    StringBuilder sb = new StringBuilder(value);
+
+    StringProcessing.removeLeadingWhitespace(sb);
+
+    // Deal with signed values
+    boolean willBeNegative = false;
+    if (sb.charAt(0) == '-' || sb.charAt(0) == '+')
+    {
+      if (sb.charAt(0) == '-')
+        willBeNegative = true;
+      sb.deleteCharAt(0);
+    }
+
+    StringProcessing.removeLeadingWhitespace(sb);
+
+    // Deal with bases
+    int base = 10;
+    if (sb.length() > 2 && (sb.charAt(0) == '0' && (sb.charAt(1) == 'b' || sb.charAt(1) == 'x' || sb.charAt(1) == 'o')))
+    {
+      sb.deleteCharAt(0);
+      char b = sb.charAt(0);
+      sb.deleteCharAt(0);
+      switch (b)
+      {
+        case 'b':
+          base = 2;
+          break;
+        case 'o':
+          base = 8;
+          break;
+        case 'x':
+          base = 16;
+          break;
+      }
+    }
+
+    // Determine the length of the array by using the number of digits in the number in base ten.
+    this.value = new int[0];
+
+    StringProcessing.removeTrailingWhitespace(sb);
+
+    while (sb.length() > 0)
+    {
+      this.value = this.multiply(base).value;
+      char v = sb.charAt(0);
+      sb.deleteCharAt(0);
+      if (!CharProcessing.contains(charset(base), v))
+        throw new IllegalArgumentException("Expected number, found: \'" + v + "\'");
+      int val = CharProcessing.isNumeric(v) ? v - '0' : Character.isLowerCase(v) ? v - 'a' + 0xa : v - 'A' + 0xA;
+      this.value = ((Int)this.add(new Int(val))).value;
+    }
+
+    if (willBeNegative)
+      negative = true;
+
+    forceClean();
+  }
+
+  /**
    * Private constructor for {@link com.hypereclipse.selkie.cas.Int}.
    *
    * This constructor is used internally by {@link com.hypereclipse.selkie.cas.Int} to create new {@link com.hypereclipse.selkie.cas.Int} objects given an existing set of instance variables.
@@ -189,19 +259,7 @@ public class Int implements Value
    */
   public static Int create(String integerString, int base)
   {
-    char[] baseCharset = CHARSET_36; // If 62 or less
-    if(base == 2)
-      baseCharset = CHARSET_BINARY;
-    if(base == 8)
-      baseCharset = CHARSET_OCTAL;
-    if(base == 10)
-      baseCharset = CHARSET_DECIMAL;
-    if(base == 16)
-      baseCharset = CHARSET_HEX;
-    if(base == 64)
-      baseCharset = CHARSET_BASE64;
-    if (base == 63 || base > 64)
-      throw new IllegalArgumentException("That base is not supported!");
+    char[] baseCharset = charset(base);
 
     boolean isPosative = true;
     if (integerString.charAt(0) == '-' || integerString.charAt(0) == '+')
@@ -418,7 +476,6 @@ public class Int implements Value
   {
     // We only want to process it if we know how to (when its also an Int). Otherwise, we'll have their class process it.
     if (!(other instanceof Int))
-      // TODO: We need some other way to take care of integer division, if the value we are dividing by is not an integer.
       throw new IllegalArgumentException("That isnt implemented yet!");
 
     Int o = (Int)other;
@@ -454,16 +511,11 @@ public class Int implements Value
     Int temp = this;
     while (temp.greaterEqual(o))
     {
-      //temp.clean();
-      //System.out.println(indecieOfCompare+" "+atsr(ret)+" "+atsr(temp.value)+" "+atsr(o.value));
       // If its divisable at this point, do so.
       while (temp.shift(-4 * indecieOfCompare).greaterEqual(o))
       {
         ret[indecieOfCompare]++;
         temp = (Int)temp.subtract(o.shift(4 * indecieOfCompare));
-
-        //temp.clean();
-        //System.out.println(indecieOfCompare+" "+atsr(ret)+" "+atsr(temp.value)+" "+atsr(o.value));
       }
       indecieOfCompare--;
     }
@@ -478,14 +530,14 @@ public class Int implements Value
 
   private Int multiply(int coeff)
   {
-    if (coeff < 0 || coeff > 0xF)
-      throw new IllegalArgumentException("factor invalid");
+    //if (coeff < 0 || coeff > 0xF)
+    //  throw new IllegalArgumentException("factor invalid");
     if (coeff == 0)
       return ZERO;
     if (coeff == 1)
       return this;
 
-    int[] ret = new int[value.length + 1];
+    int[] ret = new int[value.length + (int)(Math.log(coeff) / Math.log(0x10)) + 1];
     int carry = 0;
     for (int i = 0; i < ret.length; i++)
     {
@@ -509,22 +561,13 @@ public class Int implements Value
   public String exact()
   {
     clean();
-    StringBuilder sb = new StringBuilder(value.length);
-    for (int i = value.length - 1; i >= 0; i--)
-      if (value[i] > 9) sb.append((char) ('A' + value[i] - 0xA));
-      else sb.append(value[i]);
-    if (isZero()) sb.append('0');
-    return (isNegative() ? "-0x" : "0x") + sb.toString();
+    return toString();
   }
 
-  public static final char[] CHARSET_BINARY = new char[]{'0', '1'};
-  public static final char[] CHARSET_OCTAL = "01234567".toCharArray();
-  public static final char[] CHARSET_DECIMAL = "0123456789".toCharArray();
-  public static final char[] CHARSET_HEX = "0123456789ABCDEF".toCharArray();
-  public static final char[] CHARSET_BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".toCharArray();
-  public static final char[] CHARSET_36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".toCharArray();
-
-  public String exact(int base, char[] charset)
+  public String exact(int base) {return exact(base,charset(base),true);}
+  public String exact(int base, char[] charset) {return exact(base,charset,true);}
+  public String exact(int base, boolean displayBase) {return exact(base,charset(base),displayBase);}
+  public String exact(int base, char[] charset, boolean displayBase)
   {
     if (base == 0x10 && (charset == null || charset.equals(CHARSET_HEX)))
       return exact();
@@ -533,10 +576,13 @@ public class Int implements Value
     StringBuilder sb = new StringBuilder((value.length * 0x10) / base + 5);
     String prefix = "";
     if (isNegative()) {prefix = "-"; }
-    if (base == 0x2) prefix += "0b";
-    if (base == 0x8) prefix += "0o";
-    if (base == 0x10) prefix += "0x";
-    if (base != 0x10 && base != 10 && base != 0x8 && base != 0x2) prefix += "(b-" + base + ")";
+    if (displayBase)
+    {
+      if (base == 0x2) prefix += "0b";
+      if (base == 0x8) prefix += "0o";
+      if (base == 0x10) prefix += "0x";
+      if (base != 0x10 && base != 10 && base != 0x8 && base != 0x2) prefix += "(b-" + base + ")";
+    }
 
     Int baseI = new Int(base);
     Int temp = (Int) this.abs();
@@ -708,6 +754,13 @@ public class Int implements Value
     return this;
   }
 
+  @Deprecated
+  private Int forceClean()
+  {
+    isClean = false;
+    return clean();
+  }
+
   public Integer toInt()
   {
     if (this.lessEqual(INTMAX)&&this.greaterEqual(INTMIN))
@@ -761,12 +814,35 @@ public class Int implements Value
 
   public String toString()
   {
-    return exact();
+    StringBuilder sb = new StringBuilder(value.length + 3);
+    for (int i = value.length - 1; i >= 0; i--)
+      if (value[i] > 9) sb.append((char)('A' + value[i] - 0xA));
+      else sb.append(value[i]);
+    if (value.length == 0 || (value.length == 1 && value[0] == 0)) sb.append('0');
+    return (negative ? "-0x" : "0x") + sb.toString();
   }
 
   public int hashCode()
   {
     clean();
     return Arrays.hashCode(value)^(negative?0xFFFF:0);
+  }
+
+  private static char[] charset(int base)
+  {
+    char[] baseCharset = CHARSET_36; // If 62 or less
+    if(base == 2)
+      baseCharset = CHARSET_BINARY;
+    if(base == 8)
+      baseCharset = CHARSET_OCTAL;
+    if(base == 10)
+      baseCharset = CHARSET_DECIMAL;
+    if(base == 16)
+      baseCharset = CHARSET_HEX;
+    if(base == 64)
+      baseCharset = CHARSET_BASE64;
+    if (base == 63 || base > 64)
+      throw new IllegalArgumentException("That base is not supported!");
+    return baseCharset;
   }
 }
